@@ -1,0 +1,16 @@
+{
+  "name": "weather-proxy",
+  "version": "1.0.0",
+  "description": "Secure proxy API for OpenWx Electron Weather App",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "express": "^4.18.2",
+    "node-fetch": "^3.3.2",
+    "cors": "^2.8.5"
+  }
+}
