@@ -1,6 +1,6 @@
 // weather-proxy.js
 import express from "express";
-import https from "https";
+import fetch from "node-fetch";
 import dotenv from "dotenv";
 import cors from "cors";
 
@@ -15,6 +15,22 @@ if (!WEATHER_API_KEY) {
   process.exit(1);
 }
 
+// Helper function to fetch JSON from WeatherAPI
+async function fetchWeatherAPI(endpoint) {
+  try {
+    const response = await fetch(endpoint, { timeout: 8000 });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`WeatherAPI responded with ${response.status}: ${text}`);
+    }
+    const data = await response.json();
+    return data;
+  } catch (err) {
+    console.error("WeatherAPI Fetch Error:", err.message);
+    throw err;
+  }
+}
+
 // Health check
 app.get("/", (req, res) => {
   res.json({
@@ -25,56 +41,34 @@ app.get("/", (req, res) => {
 });
 
 // --- Current Weather Endpoint ---
-app.get("/weather", (req, res) => {
+app.get("/weather", async (req, res) => {
   const query = req.query.q || "auto:ip";
   const url = `https://api.weatherapi.com/v1/current.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(
     query
   )}&aqi=no`;
 
-  https
-    .get(url, (apiRes) => {
-      let raw = "";
-      apiRes.on("data", (chunk) => (raw += chunk));
-      apiRes.on("end", () => {
-        try {
-          const data = JSON.parse(raw);
-          res.json(data);
-        } catch (err) {
-          res.status(500).json({ error: "Invalid JSON from WeatherAPI" });
-        }
-      });
-    })
-    .on("error", (err) => {
-      console.error("Weather API Error:", err.message);
-      res.status(500).json({ error: "Failed to reach WeatherAPI" });
-    });
+  try {
+    const data = await fetchWeatherAPI(url);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to fetch current weather" });
+  }
 });
 
 // --- 3-Day Forecast Endpoint ---
-app.get("/forecast", (req, res) => {
+app.get("/forecast", async (req, res) => {
   const query = req.query.q || "auto:ip";
   const days = req.query.days || 3;
   const url = `https://api.weatherapi.com/v1/forecast.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(
     query
   )}&days=${days}&aqi=no&alerts=no`;
 
-  https
-    .get(url, (apiRes) => {
-      let raw = "";
-      apiRes.on("data", (chunk) => (raw += chunk));
-      apiRes.on("end", () => {
-        try {
-          const data = JSON.parse(raw);
-          res.json(data);
-        } catch (err) {
-          res.status(500).json({ error: "Invalid JSON from WeatherAPI" });
-        }
-      });
-    })
-    .on("error", (err) => {
-      console.error("Forecast API Error:", err.message);
-      res.status(500).json({ error: "Failed to reach WeatherAPI" });
-    });
+  try {
+    const data = await fetchWeatherAPI(url);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to fetch forecast" });
+  }
 });
 
 // --- Start Server ---
