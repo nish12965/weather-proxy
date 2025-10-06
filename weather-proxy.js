@@ -1,50 +1,84 @@
+// weather-proxy.js
 import express from "express";
-import cors from "cors";
+import https from "https";
 import dotenv from "dotenv";
-import fetch from "node-fetch";
+import cors from "cors";
 
 dotenv.config();
-
 const app = express();
-const PORT = process.env.PORT || 5000;
-
 app.use(cors());
-app.use(express.json());
 
-// Weather route
-app.get("/weather", async (req, res) => {
-  const city = req.query.q;
-  const clientKey = req.header("x-app-key");
+// Load API key securely
+const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
+if (!WEATHER_API_KEY) {
+  console.error("❌ WEATHER_API_KEY is missing in environment!");
+  process.exit(1);
+}
 
-  if (!city) {
-    return res.status(400).json({ error: "City is required" });
-  }
-
-  // Security check
-  if (clientKey !== process.env.CLIENT_APP_KEY) {
-    return res.status(403).json({ error: "Unauthorized request" });
-  }
-
-  try {
-    const apiRes = await fetch(
-      `https://api.weatherapi.com/v1/current.json?key=${process.env.WEATHER_API_KEY}&q=${encodeURIComponent(city)}`
-    );
-
-    if (!apiRes.ok) {
-      const errorText = await apiRes.text();
-      throw new Error(errorText);
-    }
-
-    const data = await apiRes.json();
-    res.json(data);
-  } catch (err) {
-    console.error("API Fetch Error:", err.message);
-    res.status(500).json({ error: "Server error while fetching weather data" });
-  }
-});
-
+// Health check
 app.get("/", (req, res) => {
-  res.send("✅ Weather Proxy API is running");
+  res.json({
+    status: "ok",
+    message: "🌦️ OpenWx Weather Proxy is running",
+    endpoints: ["/weather?q=City", "/forecast?q=City"],
+  });
 });
 
-app.listen(PORT, () => console.log(`🌤️ Weather proxy running on port ${PORT}`));
+// --- Current Weather Endpoint ---
+app.get("/weather", (req, res) => {
+  const query = req.query.q || "auto:ip";
+  const url = `https://api.weatherapi.com/v1/current.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(
+    query
+  )}&aqi=no`;
+
+  https
+    .get(url, (apiRes) => {
+      let raw = "";
+      apiRes.on("data", (chunk) => (raw += chunk));
+      apiRes.on("end", () => {
+        try {
+          const data = JSON.parse(raw);
+          res.json(data);
+        } catch (err) {
+          res.status(500).json({ error: "Invalid JSON from WeatherAPI" });
+        }
+      });
+    })
+    .on("error", (err) => {
+      console.error("Weather API Error:", err.message);
+      res.status(500).json({ error: "Failed to reach WeatherAPI" });
+    });
+});
+
+// --- 3-Day Forecast Endpoint ---
+app.get("/forecast", (req, res) => {
+  const query = req.query.q || "auto:ip";
+  const days = req.query.days || 3;
+  const url = `https://api.weatherapi.com/v1/forecast.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(
+    query
+  )}&days=${days}&aqi=no&alerts=no`;
+
+  https
+    .get(url, (apiRes) => {
+      let raw = "";
+      apiRes.on("data", (chunk) => (raw += chunk));
+      apiRes.on("end", () => {
+        try {
+          const data = JSON.parse(raw);
+          res.json(data);
+        } catch (err) {
+          res.status(500).json({ error: "Invalid JSON from WeatherAPI" });
+        }
+      });
+    })
+    .on("error", (err) => {
+      console.error("Forecast API Error:", err.message);
+      res.status(500).json({ error: "Failed to reach WeatherAPI" });
+    });
+});
+
+// --- Start Server ---
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`✅ OpenWx Proxy running on port ${PORT}`);
+});
