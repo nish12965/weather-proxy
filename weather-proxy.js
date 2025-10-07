@@ -72,7 +72,7 @@ app.get("/forecast", async (req, res) => {
 });
 
 // 7-Day Forecast Endpoint 
-app.get("/forecast7", async (req, res) => {
+app.get("/forecast7Days", async (req, res) => {
   const query = req.query.q || "auto:ip";
   const days=req.query.days || 7;
   const url = `https://api.weatherapi.com/v1/forecast.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(
